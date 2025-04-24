@@ -1,0 +1,33 @@
+# config/client_config_template.yaml
+
+client_id: 0
+model_type: "lstm"  # Options: "ann", "lstm"
+
+# Dataset partition for this client
+train_data_path: "data/datasets/snips/client_0_train.json"
+test_data_path: "data/datasets/snips/client_0_test.json"
+max_seq_length: 50
+vocab_size: 10000
+
+# Training hyperparameters (can be overridden per client)
+epochs: 2
+batch_size: 32
+learning_rate: 0.001
+weight_decay: 0.0001
+optimizer: "adam"
+loss_function: "cross_entropy"
+
+# Model hyperparameters
+lstm:
+  hidden_dim: 128
+  num_layers: 1
+  dropout: 0.5
+
+ann:
+  hidden_dims: [128, 64]
+  dropout: 0.5
+
+# Logging and saving
+log_dir: "outputs/logs/client_0/"
+checkpoint_dir: "outputs/checkpoints/client_0/"
+device: "cuda"  # or "cpu"

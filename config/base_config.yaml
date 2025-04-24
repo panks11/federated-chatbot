@@ -1,0 +1,50 @@
+# config/base_config.yaml
+
+# General config
+experiment_name: "federated_text_classification"
+model_type: "lstm"  # Options: "ann", "lstm"
+use_federated: true
+
+# Dataset config
+dataset_name: "snips"
+data_path: "data/datasets/snips/"
+max_seq_length: 50
+vocab_size: 10000
+
+# Training config
+epochs: 10
+batch_size: 32
+learning_rate: 0.001
+weight_decay: 0.0001
+optimizer: "adam"
+loss_function: "cross_entropy"
+
+# Federated learning config
+federated:
+  num_clients: 5
+  clients_per_round: 3
+  rounds: 20
+  local_epochs: 2
+  aggregation_method: "fedavg"
+
+# Model config
+lstm:
+  hidden_dim: 128
+  num_layers: 1
+  dropout: 0.5
+
+ann:
+  hidden_dims: [128, 64]
+  dropout: 0.5
+
+# Logging and checkpointing
+logging:
+  log_dir: "outputs/logs/"
+  log_interval: 10
+
+checkpoint:
+  save_dir: "outputs/checkpoints/"
+  save_interval: 5
+
+# Device
+device: "cuda"  # or "cpu"

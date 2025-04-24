@@ -1,0 +1,43 @@
+[
+    {
+      "text": "I want to book a flight to Paris",
+      "label": "BookFlight"
+    },
+    {
+      "text": "Play some rock music",
+      "label": "PlayMusic"
+    },
+    {
+      "text": "Will it rain tomorrow in San Francisco?",
+      "label": "GetWeather"
+    },
+    {
+      "text": "Wake me up at 6:30 AM",
+      "label": "SetAlarm"
+    },
+    {
+      "text": "Turn on the fan in the bedroom",
+      "label": "SwitchOnDevice"
+    },
+    {
+      "text": "Book a ticket from LA to Tokyo",
+      "label": "BookFlight"
+    },
+    {
+      "text": "Can you play my morning playlist?",
+      "label": "PlayMusic"
+    },
+    {
+      "text": "What’s the forecast for the weekend?",
+      "label": "GetWeather"
+    },
+    {
+      "text": "Set a reminder for my meeting at 3 PM",
+      "label": "SetReminder"
+    },
+    {
+      "text": "Switch off the kitchen lights",
+      "label": "SwitchOffDevice"
+    }
+  ]
+  

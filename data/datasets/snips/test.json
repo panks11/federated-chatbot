@@ -1,0 +1,23 @@
+[
+    {
+      "text": "Book me a flight to New York",
+      "label": "BookFlight"
+    },
+    {
+      "text": "Play some jazz music",
+      "label": "PlayMusic"
+    },
+    {
+      "text": "What's the weather like in London?",
+      "label": "GetWeather"
+    },
+    {
+      "text": "Set an alarm for 7 AM",
+      "label": "SetAlarm"
+    },
+    {
+      "text": "Turn off the lights in the living room",
+      "label": "SwitchOffDevice"
+    }
+  ]
+  
