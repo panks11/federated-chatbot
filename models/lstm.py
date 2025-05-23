@@ -1,29 +1,26 @@
-# models/lstm.py
-
-import torch
 import torch.nn as nn
 
-class LSTMModel(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, hidden_dim, output_dim, num_layers=1, dropout=0.5):
-        super(LSTMModel, self).__init__()
 
-        self.embedding = nn.Embedding(vocab_size, embedding_dim)
+class LSTM(nn.Module):
+    def __init__(self, vocab_size, output_size, num_layers=1, hidden_size=128):
+        super(LSTM, self).__init__()
+        
+        # Create an embedding layer to convert token indices to dense vectors
+        self.embedding = nn.Embedding(vocab_size, hidden_size)
+        
+        # Define the LSTM layer
+        self.lstm = nn.LSTM(input_size=hidden_size, hidden_size=hidden_size, 
+                            num_layers=num_layers, batch_first=True, dropout=0.5 if num_layers > 1 else 0)
+        
+        # Define the output fully connected layer
+        self.fc_out = nn.Linear(hidden_size, output_size)
 
-        self.lstm = nn.LSTM(
-            input_size=embedding_dim,
-            hidden_size=hidden_dim,
-            num_layers=num_layers,
-            batch_first=True,
-            dropout=dropout if num_layers > 1 else 0
-        )
+    def forward(self, input_seq, hidden_in, mem_in):
+        # Convert token indices to dense vectors
+        input_embs = self.embedding(input_seq)
 
-        self.dropout = nn.Dropout(dropout)
-        self.fc = nn.Linear(hidden_dim, output_dim)
-
-    def forward(self, x):
-        # x: [batch_size, seq_len]
-        embedded = self.embedding(x)             # [batch_size, seq_len, embedding_dim]
-        lstm_out, _ = self.lstm(embedded)        # [batch_size, seq_len, hidden_dim]
-        last_hidden = lstm_out[:, -1, :]         # [batch_size, hidden_dim]
-        out = self.dropout(last_hidden)
-        return self.fc(out)                      # [batch_size, output_dim]
+        # Pass the embeddings through the LSTM layer
+        output, (hidden_out, mem_out) = self.lstm(input_embs, (hidden_in, mem_in))
+                
+        # Pass the LSTM output through the fully connected layer to get the final output
+        return self.fc_out(output), hidden_out, mem_out
