@@ -1,6 +1,7 @@
 import random
 import torch
 from torch import optim
+import torch.nn as nn
 from torch.utils.data import DataLoader
 import torchtext; torchtext.disable_torchtext_deprecation_warning()
 from torchtext.data.utils import get_tokenizer
@@ -18,31 +19,63 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 # Utility operations for training and evaluation
-def train_model(model, dataloader, optimizer, epochs=1):
+def train_model(model, dataloader, optimizer, loss_fn, text_tranform, text_tokenizer,num_layers, hidden_size, epochs=1):
     model.train()
+    train_acc, total_loss, total_samples = 0, 0.0, 0
     for _ in range(epochs):
         total_loss, total_samples = 0.0, 0
-        for x, y in dataloader:
-            x, y = x.to(device), y.to(device)
+        for label, text in dataloader:
+            # Tokenize and transform text to tensor, move to device
+            bs = label.shape[0]
+            text_tokens = text_tranform(text_tokenizer(text)).to(device)
+            label = label.to(device)
+            
+            # label = (label-1).to(device)
+            # Initialize hidden and memory states
+            hidden = torch.zeros(num_layers, bs, hidden_size, device=device)
+            memory = torch.zeros(num_layers, bs, hidden_size, device=device)
+            
+            # Forward pass through the model
+            pred, hidden, memory = model(text_tokens, hidden, memory)
+
+            # Calculate the loss
+            loss = loss_fn(pred[:, -1, :], label)
+                
+            # Backpropagation and optimization
             optimizer.zero_grad()
-            loss = torch.nn.CrossEntropyLoss()(model(x), y)
             loss.backward()
             optimizer.step()
-            total_loss += loss.item() * y.size(0)
-            total_samples += y.size(0)
-    return total_loss / total_samples
+            total_loss += loss.item() * label.size(0)
+            total_samples += label.size(0)
+            train_acc += (pred[:, -1, :].argmax(1) == label).sum()
+    return train_acc/total_samples, total_loss / total_samples
 
-def evaluate_model(model, dataloader):
+def evaluate_model(model, dataloader, loss_fn, text_tranform, text_tokenizer,num_layers, hidden_size):
     model.eval()
-    correct, total = 0, 0
+    test_acc, total_loss, total_samples = 0, 0.0, 0
     with torch.no_grad():
-        for x, y in dataloader:
-            x, y = x.to(device), y.to(device)
-            outputs = model(x)
-            preds = outputs.argmax(dim=1)
-            correct += (preds == y).sum().item()
-            total += y.size(0)
-    return correct / total
+        for label, text in dataloader:
+            # Tokenize and transform text to tensor, move to device
+            bs = label.shape[0]
+            text_tokens = text_tranform(text_tokenizer(text)).to(device)
+            label = label.to(device)
+            
+            # label = (label-1).to(device)
+            # Initialize hidden and memory states
+            hidden = torch.zeros(num_layers, bs, hidden_size, device=device)
+            memory = torch.zeros(num_layers, bs, hidden_size, device=device)
+            
+            # Forward pass through the model
+            pred, hidden, memory = model(text_tokens, hidden, memory)
+
+            # Calculate the loss
+            loss = loss_fn(pred[:, -1, :], label)
+                
+            total_loss += loss.item() * label.size(0)
+            total_samples += label.size(0)
+            test_acc += (pred[:, -1, :].argmax(1) == label).sum()
+    
+    return test_acc/total_samples, total_loss / total_samples
 
 
 def copy_weights(target, source):
@@ -72,13 +105,21 @@ def split_dataset(dataset, frac=0.8):
 
 
 class FederatedClient:
-    def __init__(self, model_fn, optimizer_fn, dataset, cid, batch_size=128):
+    def __init__(self, model_fn, optimizer_fn, text_transform, num_layers, hidden_size, dataset, cid, batch_size=128):
         self.id = cid
         self.model = model_fn().to(device)
         self.optimizer = optimizer_fn(self.model.parameters())
         self.W = {k: v for k, v in self.model.named_parameters()}
         self.dW = {k: torch.zeros_like(v) for k, v in self.W.items()}
         self.W_old = {k: torch.zeros_like(v) for k, v in self.W.items()}
+        tokenizer = get_tokenizer("basic_english")
+        self.text_tokenizer = lambda batch: [tokenizer(x) for x in batch]
+        self.loss_fn = nn.CrossEntropyLoss()
+        self.text_transform = text_transform
+        self.num_layers = num_layers
+        self.hidden_size = hidden_size
+
+
 
         train_data, eval_data = split_dataset(dataset)
         self.train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
@@ -89,7 +130,7 @@ class FederatedClient:
 
     def update(self, epochs=1):
         copy_weights(self.W_old, self.W)
-        train_model(self.model, self.train_loader, self.optimizer, epochs)
+        train_model(self.model, self.train_loader, self.optimizer,self.loss_fn,self.text_transform, self.text_tokenizer,self.num_layers,self.hidden_size, epochs)
         subtract_weights(self.dW, self.W, self.W_old)
 
     def evaluate(self):
@@ -98,14 +139,21 @@ class FederatedClient:
 
 # Federated server
 class FederatedServer:
-    def __init__(self, model_fn, dataset):
+    def __init__(self, model_fn, text_transform, num_layers, hidden_size, dataset):
         self.model = model_fn().to(device)
         self.W = {k: v for k, v in self.model.named_parameters()}
         self.dataset = dataset
+        tokenizer = get_tokenizer("basic_english")
+        self.text_tokenizer = lambda batch: [tokenizer(x) for x in batch]
+        self.text_transform = text_transform
+        self.num_layers = num_layers
+        self.hidden_size = hidden_size
+        self.loss_fn = nn.CrossEntropyLoss()
+
 
     def evaluate(self):
         loader = DataLoader(self.dataset, batch_size=128)
-        return evaluate_model(self.model, loader)
+        return evaluate_model(self.model, loader, self.loss_fn, self.text_transform, self.text_tokenizer, self.num_layers, self.hidden_size)
 
     def aggregate(self, clients):
         average_weights([self.W], [client.dW for client in clients])
@@ -136,30 +184,30 @@ def run_federated_training(config, client_dataframes):
         return LSTM(
             vocab_size=len(vocab),
             output_size=config['num_classes'],
-            num_layers=config['num_layers'],
-            hidden_size=config['hidden_size']
+            num_layers=config["lstm"]["num_layers"],
+            hidden_size=config["lstm"]['hidden_size']
         )
 
     def optimizer_fn(params):
         return optim.Adam(params, lr=config['learning_rate'])
 
     clients = [
-        FederatedClient(model_fn, optimizer_fn, ds, cid=i)
+        FederatedClient(model_fn, optimizer_fn, text_transform, config["lstm"]["num_layers"], config["lstm"]['hidden_size'], ds, cid=i)
         for i, ds in enumerate(client_datasets)
     ]
 
     full_dataset = torch.utils.data.ConcatDataset(client_datasets)
-    server = FederatedServer(model_fn, full_dataset)
+    server = FederatedServer(model_fn, text_transform, config["lstm"]["num_layers"], config["lstm"]['hidden_size'],  full_dataset)
 
-    for round in range(config['rounds']):
+    for round in range(config['federated']['rounds']):
         print(f"\n--- Round {round+1} ---")
 
         for client in clients:
             client.synchronize(server)
-            client.update(config['local_epochs'])
+            client.update(config['federated']['local_epochs'])
 
         server.aggregate(clients)
-        round_acc = server.evaluate()
+        round_acc,round_loss = server.evaluate()
         print(f"Round {round+1} Accuracy: {round_acc:.4f}")
 
 
@@ -171,4 +219,4 @@ if __name__ == "__main__":
     client_data = [dataframe_train.iloc[idcs].reset_index(drop=True) for idcs in client_idcs]
 
     print(f"Client data sizes: {[len(data) for data in client_data]}")
-    # run_federated_training(config, client_data)
+    run_federated_training(config, client_data)
