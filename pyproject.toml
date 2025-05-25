@@ -13,4 +13,5 @@ dependencies = [
     "torchdata==0.9.0",
     "portalocker>=3.1.1",
     "pyyaml>=6.0.2",
+    "scikit-learn>=1.6.1",
 ]
